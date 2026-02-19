@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "730455033743",
+    "project_id": "sevigdrone-13e6c",
+    "storage_bucket": "sevigdrone-13e6c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730455033743:android:d42b2000163c57940e2dfa",
+        "android_client_info": {
+          "package_name": "com.sevigdrone"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAF7CIKlxHLazifXLXIKDuNrSVIGfx1TmY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

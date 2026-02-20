@@ -289,6 +289,40 @@ class _CourseImageCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 16),
+                      if (isUnlocked)
+                        StreamBuilder<QuerySnapshot>(
+                          stream: Provider.of<CourseRepository>(context, listen: false).getCourseContentStream(course.id),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink();
+                            
+                            int total = snapshot.data!.docs.length;
+                            int opened = snapshot.data!.docs.where((doc) => user?.openedResources.contains(doc.id) ?? false).length;
+                            double progress = total > 0 ? opened / total : 0;
+                            
+                            return Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text("PROGRESO DEL CURSO", style: TextStyle(color: goldColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                                    Text("${(progress * 100).toInt()}%", style: TextStyle(color: goldColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.white24,
+                                    valueColor: AlwaysStoppedAnimation<Color>(goldColor),
+                                    minHeight: 8,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            );
+                          }
+                        ),
                       if (!isUnlocked)
                         SizedBox(
                           width: double.infinity,
@@ -415,9 +449,15 @@ class _CourseImageCard extends StatelessWidget {
                              );
                           }
 
-                          var res = snapshot.data!.docs[index - 1].data() as Map<String, dynamic>;
+                          var doc = snapshot.data!.docs[index - 1];
+                          var res = doc.data() as Map<String, dynamic>;
+                          final String resId = doc.id;
                           final url = Uri.parse(res['url']);
                           final type = res['type'] ?? 'link';
+                          
+                          // Consumimos AuthService aquí para saber si ya lo vio
+                          final authService = Provider.of<AuthService>(context);
+                          final isOpened = authService.user?.openedResources.contains(resId) ?? false;
 
                           IconData icon;
                           Color iconColor;
@@ -450,8 +490,11 @@ class _CourseImageCard extends StatelessWidget {
                               ),
                               title: Text(res['title'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
                               subtitle: Text(type.toUpperCase(), style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                              trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
+                              trailing: isOpened 
+                                ? const Icon(Icons.check_circle, color: Colors.green, size: 20) 
+                                : const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
                               onTap: () async {
+                                 Provider.of<AuthService>(context, listen: false).markResourceOpened(resId);
                                  try {
                                   if (await canLaunchUrl(url)) {
                                     await launchUrl(url, mode: LaunchMode.externalApplication);

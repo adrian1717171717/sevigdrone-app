@@ -23,6 +23,9 @@ dependencies:
   provider: ^6.1.2 # Para gestión de estado
   geolocator: ^11.0.0
   permission_handler: ^11.3.0
+  shared_preferences: ^2.2.2
+  metadata_fetch: ^0.4.1
+  flutter_compass: ^0.8.0
 
 dev_dependencies:
   flutter_test:

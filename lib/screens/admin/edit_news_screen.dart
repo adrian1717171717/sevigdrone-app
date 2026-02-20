@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:metadata_fetch/metadata_fetch.dart';
 import '../../models/news_model.dart';
 import '../../repositories/news_repository.dart';
 
@@ -19,8 +20,10 @@ class _EditNewsScreenState extends State<EditNewsScreen> {
   late TextEditingController _titleCtrl;
   late TextEditingController _bodyCtrl;
   late TextEditingController _imageCtrl;
+  late TextEditingController _urlCtrl;
 
   bool _isSaving = false;
+  bool _isFetchingMetadata = false;
 
   bool get _isEditing => widget.news != null;
 
@@ -30,6 +33,7 @@ class _EditNewsScreenState extends State<EditNewsScreen> {
     _titleCtrl = TextEditingController(text: widget.news?.title ?? '');
     _bodyCtrl = TextEditingController(text: widget.news?.body ?? '');
     _imageCtrl = TextEditingController(text: widget.news?.image ?? '');
+    _urlCtrl = TextEditingController(text: widget.news?.url ?? '');
   }
 
   @override
@@ -37,7 +41,38 @@ class _EditNewsScreenState extends State<EditNewsScreen> {
     _titleCtrl.dispose();
     _bodyCtrl.dispose();
     _imageCtrl.dispose();
+    _urlCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchMetadataFromUrl() async {
+    final url = _urlCtrl.text.trim();
+    if (url.isEmpty || !url.startsWith('http')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ingresa una URL válida (http...)")));
+      return;
+    }
+    setState(() => _isFetchingMetadata = true);
+    try {
+      var data = await MetadataFetch.extract(url);
+      if (data != null) {
+        if (data.title != null && data.title!.isNotEmpty) {
+          _titleCtrl.text = data.title!;
+        }
+        if (data.image != null && data.image!.isNotEmpty) {
+          _imageCtrl.text = data.image!;
+        }
+        if (data.description != null && data.description!.isNotEmpty && _bodyCtrl.text.isEmpty) {
+          _bodyCtrl.text = data.description!;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Metadatos extraídos correctamente"), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se encontraron metadatos en la URL")));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al extraer metadatos: $e")));
+    } finally {
+      setState(() => _isFetchingMetadata = false);
+    }
   }
 
   Future<void> _saveNews() async {
@@ -52,6 +87,7 @@ class _EditNewsScreenState extends State<EditNewsScreen> {
       'title': _titleCtrl.text,
       'body': _bodyCtrl.text,
       'image': _imageCtrl.text,
+      'url': _urlCtrl.text,
       'date': FieldValue.serverTimestamp(), 
       'author': 'Comandancia SEVIGDRONE',
     };
@@ -96,6 +132,25 @@ class _EditNewsScreenState extends State<EditNewsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                TextFormField(
+                  controller: _urlCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: "URL de la Noticia (Pegar aquí)",
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _isFetchingMetadata
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.download_for_offline, color: Color(0xFFD4AF37)),
+                            tooltip: "Extraer Datos (Open Graph)",
+                            onPressed: _fetchMetadataFromUrl,
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _titleCtrl,
                   style: const TextStyle(color: Colors.white),

@@ -1,58 +1,108 @@
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
+import 'package:metadata_fetch/metadata_fetch.dart';
+import 'package:intl/intl.dart';
+import 'preferences_service.dart';
 
 class RssService {
   final String _feedUrl = 'https://news.google.com/rss/search?q=drones+tecnologia&hl=es-419&gl=EC&ceid=EC:es-419';
 
   Future<List<Map<String, String>>> getNews() async {
     try {
+      // 1. Revisar caché de hoy
+      final String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final String? lastFetch = await PreferencesService.getLastNewsFetchDate();
+      
+      if (lastFetch == today) {
+        // Retornar datos de caché si son de hoy
+        final String? cachedJson = await PreferencesService.getCachedNews();
+        if (cachedJson != null && cachedJson.isNotEmpty) {
+          final List<dynamic> decoded = jsonDecode(cachedJson);
+          return decoded.map((item) => Map<String, String>.from(item as Map)).toList();
+        }
+      }
+
+      // 2. Si no hay caché válido, buscar desde la red
       final response = await http.get(Uri.parse(_feedUrl));
 
       if (response.statusCode == 200) {
         final document = XmlDocument.parse(response.body);
-        final items = document.findAllElements('item');
+        final items = document.findAllElements('item').take(6); // Limitamos a 6 para no demorar extrayendo metadata
 
-        return items.map((node) {
+        List<Map<String, String>> fetchedNews = [];
+        
+        for (var node in items) {
           String title = _getText(node, 'title');
           String link = _getText(node, 'link');
           String pubDate = _getText(node, 'pubDate');
           String description = _getText(node, 'description');
 
-          // --- LÓGICA MEJORADA PARA EXTRAER IMAGEN ---
-          // Google News a veces pone la imagen dentro de la descripción como HTML
-          String imageUrl = _getImageUrl(node) ?? _findImageInDescription(description) ?? '';
-
-          // Si falla, intentamos una imagen por defecto o placeholder si se desea
-          // pero por ahora dejamos vacío para que la UI maneje el placeholder.
-
-          // Limpieza del título
+          // Limpieza de título e body básico
           if (title.contains(' - ')) {
             title = title.split(' - ')[0].trim();
           }
-
-          // Limpieza de la descripción (quitamos etiquetas HTML para el texto resumen)
           String cleanBody = _stripHtml(description);
 
-          return {
+          // 3. Extraer imagen
+          String imageUrl = '';
+          
+          // Primero tratar de obtener con Open Graph (MetadataFetch)
+          if (link.isNotEmpty) {
+            try {
+              var data = await MetadataFetch.extract(link);
+              if (data != null && data.image != null && data.image!.isNotEmpty) {
+                imageUrl = data.image!;
+              }
+            } catch (e) {
+              print('Error extrayendo metadata para $link: $e');
+            }
+          }
+
+          // Si falla Open Graph, intentar los fallbacks anteriores
+          if (imageUrl.isEmpty) {
+             imageUrl = _getImageUrl(node) ?? _findImageInDescription(description) ?? '';
+          }
+
+          fetchedNews.add({
             'title': title,
             'link': link,
             'pubDate': pubDate,
             'image': imageUrl,
-            'body': cleanBody, // Usamos una versión limpia para el texto
-            'raw_description': description // Guardamos la original por si acaso
-          };
-        }).toList();
+            'body': cleanBody,
+            'raw_description': description
+          });
+        }
+
+        // 4. Guardar en caché
+        await PreferencesService.setCachedNews(jsonEncode(fetchedNews));
+        await PreferencesService.setLastNewsFetchDate(today);
+
+        return fetchedNews;
       } else {
         print("Error en la respuesta del servidor: ${response.statusCode}");
-        return [];
+        return _fallbackToCache();
       }
     } catch (e) {
       print("Error al procesar el feed RSS: $e");
-      return [];
+      return _fallbackToCache();
     }
   }
 
-  // --- HELPERS PARA UNA EXTRACCIÓN MÁS ROBUSTA ---
+  Future<List<Map<String, String>>> _fallbackToCache() async {
+    try {
+      final String? cachedJson = await PreferencesService.getCachedNews();
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(cachedJson);
+        return decoded.map((item) => Map<String, String>.from(item as Map)).toList();
+      }
+    } catch(e) {
+      print("Error leyendo caché de seguridad: $e");
+    }
+    return [];
+  }
+
+  // --- HELPERS ---
 
   String _getText(XmlElement node, String tag) {
     try {
@@ -63,24 +113,18 @@ class RssService {
   }
 
   String? _getImageUrl(XmlElement node) {
-    // 1. Prioridad: Etiqueta <media:content>
     final mediaContent = node.findElements('media:content').firstOrNull;
     if (mediaContent != null) {
       return mediaContent.getAttribute('url');
     }
-
-    // 2. Segunda opción: Etiqueta <enclosure>
     final enclosure = node.findElements('enclosure').firstOrNull;
     if (enclosure != null && enclosure.getAttribute('type')?.startsWith('image/') == true) {
       return enclosure.getAttribute('url');
     }
-
     return null; 
   }
 
   String? _findImageInDescription(String description) {
-    // 3. Último recurso: Buscar <img> en la descripción (común en Google News)
-    // Buscamos src="URL"
     final imageMatch = RegExp(r'src="([^"]+)"').firstMatch(description);
     if (imageMatch != null) {
       return imageMatch.group(1);

@@ -117,4 +117,15 @@ class AuthService with ChangeNotifier {
       throw e;
     }
   }
+
+  Future<void> markResourceOpened(String resourceId) async {
+    if (_userModel == null) return;
+    if (!_userModel!.openedResources.contains(resourceId)) {
+      _userModel!.openedResources.add(resourceId);
+      await _firestore.collection('users').doc(_userModel!.uid).update({
+        'opened_resources': _userModel!.openedResources,
+      });
+      notifyListeners();
+    }
+  }
 }

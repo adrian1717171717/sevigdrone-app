@@ -6,6 +6,7 @@ class NewsModel {
   final String body;
   final String? image;
   final String? author;
+  final String? url;
   final Timestamp date;
 
   NewsModel({
@@ -14,6 +15,7 @@ class NewsModel {
     required this.body,
     this.image,
     this.author,
+    this.url,
     required this.date,
   });
 
@@ -23,6 +25,7 @@ class NewsModel {
       'body': body,
       'image': image,
       'author': author,
+      'url': url,
       'date': date,
     };
   }
@@ -35,7 +38,8 @@ class NewsModel {
       body: data['body'] ?? '',
       image: data['image'] as String?,
       author: data['author'] as String?,
-      date: data['date'] ?? Timestamp.now(),
+      url: data['url'] as String?,
+      date: data['date'] as Timestamp? ?? Timestamp.now(),
     );
   }
 }

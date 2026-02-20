@@ -7,6 +7,7 @@ class UserModel {
   final String role;
   final String? gender;
   final List<String> purchasedCourses;
+  final List<String> openedResources; // NUEVO CAMPO: recursos (videos/PDFs) abiertos
   final int totalFlightMinutes; // Nuevo campo
 
   UserModel({
@@ -16,6 +17,7 @@ class UserModel {
     required this.role,
     this.gender,
     required this.purchasedCourses,
+    this.openedResources = const [],
     this.totalFlightMinutes = 0,
   });
 
@@ -27,6 +29,7 @@ class UserModel {
       'role': role,
       'gender': gender,
       'purchased_courses': purchasedCourses,
+      'opened_resources': openedResources,
       'total_flight_minutes': totalFlightMinutes,
     };
   }
@@ -37,6 +40,9 @@ class UserModel {
     var coursesFromDb = data['purchased_courses'] as List<dynamic>?;
     List<String> courses = coursesFromDb?.map((courseId) => courseId.toString()).toList() ?? [];
 
+    var resourcesFromDb = data['opened_resources'] as List<dynamic>?;
+    List<String> openedRes = resourcesFromDb?.map((resId) => resId.toString()).toList() ?? [];
+
     return UserModel(
       uid: data['uid'] ?? doc.id,
       email: data['email'] ?? '',
@@ -44,6 +50,7 @@ class UserModel {
       role: data['role'] ?? 'user',
       gender: data['gender'] as String?,
       purchasedCourses: courses,
+      openedResources: openedRes,
       totalFlightMinutes: data['total_flight_minutes'] ?? 0,
     );
   }

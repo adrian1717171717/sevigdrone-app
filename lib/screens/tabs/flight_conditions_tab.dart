@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart'; // Asegúrate de tener geolocator
+import 'package:geolocator/geolocator.dart'; 
+import 'package:flutter_compass/flutter_compass.dart';
 import '../../services/weather_service.dart';
 import 'dart:math' as math;
 
@@ -16,17 +17,19 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
   int _kpIndex = 0;
   bool _loading = true;
   String _error = '';
-
-  // Umbrales para "Bueno para volar" (Ejemplo)
-  final double _maxWindSpeed = 25.0; // km/h
-  final double _maxGusts = 35.0; // km/h
-  final int _maxKp = 5;
-  final double _minVisibility = 5000; // metros (5km) (API devuelve metros o km, chequear)
+  double? _heading = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchData();
+    FlutterCompass.events?.listen((CompassEvent event) {
+      if (mounted) {
+        setState(() {
+          _heading = event.heading;
+        });
+      }
+    });
   }
 
   Future<void> _fetchData() async {
@@ -61,12 +64,36 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
     }
   }
 
-  bool _isGoodToFly(double wind, double gusts, int kp, double rainProb) {
-    if (wind > _maxWindSpeed) return false;
-    if (gusts > _maxGusts) return false;
-    if (kp >= _maxKp) return false;
-    if (rainProb > 50) return false; // Si probabilidad de lluvia > 50%
-    return true;
+  String _soraStatus = "APTO PARA VOLAR";
+  Color _soraColor = Colors.green;
+  IconData _soraIcon = Icons.check_circle;
+
+  void _calculateSora(double wind, double gusts, double rainProp) {
+    if (wind > 35.0 || rainProp > 20.0) {
+      _soraStatus = "NO APTO (Peligro crítico)";
+      _soraColor = Colors.red;
+      _soraIcon = Icons.cancel;
+    } else if (wind > 20.0 || gusts > 25.0) {
+      _soraStatus = "PRECAUCIÓN (Viento Fuerte)";
+      _soraColor = Colors.orange;
+      _soraIcon = Icons.warning;
+    } else {
+      _soraStatus = "APTO PARA VOLAR";
+      _soraColor = Colors.green;
+      _soraIcon = Icons.check_circle;
+    }
+  }
+
+  String _getWindDirectionLetter(int degrees) {
+    if (degrees >= 337.5 || degrees < 22.5) return 'N';
+    if (degrees >= 22.5 && degrees < 67.5) return 'NE';
+    if (degrees >= 67.5 && degrees < 112.5) return 'E';
+    if (degrees >= 112.5 && degrees < 157.5) return 'SE';
+    if (degrees >= 157.5 && degrees < 202.5) return 'S';
+    if (degrees >= 202.5 && degrees < 247.5) return 'SO';
+    if (degrees >= 247.5 && degrees < 292.5) return 'O';
+    if (degrees >= 292.5 && degrees < 337.5) return 'NO';
+    return '';
   }
 
   Color _getValueColor(double value, double threshold) {
@@ -90,22 +117,22 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
     final int windDir = (current['wind_direction_10m'] as num?)?.toInt() ?? 0;
     final int cloudCover = (current['cloud_cover'] as num?)?.toInt() ?? 0;
     final double precipitation = (current['precipitation'] as num?)?.toDouble() ?? 0.0;
-    // Visibilidad suele estar en 'hourly' en Open-Meteo, tomamos el primer valor o estimamos
-    // Para simplificar, si no hay visibility en current, usaremos un valor dummy o buscaremos otra forma.
-    // Open-Meteo free no siempre da visibilidad en 'current', pero sí en hourly.
-    final double visibility = 10000; // Valor por defecto > 10km
+    // Visibilidad no disponible directamente en current, usar precipitation de proxy
+    // Interpretamos >0.5 mm como >20% de probabilidad de lluvia
+    final double rainProb = precipitation > 0.5 ? 25.0 : 0.0; 
 
-    final bool goodToFly = _isGoodToFly(windSpeed, windGusts, _kpIndex, precipitation * 100); // *100 si es mm a probabilidad aproximada
+    _calculateSora(windSpeed, windGusts, rainProb);
+    final goldColor = Theme.of(context).primaryColor;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text("Condiciones de Vuelo"),
+        title: Text("Análisis de Vuelo - SORA", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: goldColor),
             onPressed: _fetchData,
           )
         ],
@@ -114,28 +141,84 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // --- HEADER STATUS ---
+            // --- HEADER SORA STATUS ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               decoration: BoxDecoration(
-                color: goodToFly ? Colors.green[800] : Colors.red[800],
+                color: _soraColor.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
                 children: [
+                  Icon(_soraIcon, size: 50, color: Colors.white),
+                  const SizedBox(height: 10),
                   Text(
-                    goodToFly ? "BUENO PARA VOLAR" : "NO RECOMENDADO",
+                    _soraStatus,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 8),
-                  const Text("Pronóstico en tiempo real", style: TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
+
+            // --- COMPASS ---
+            Center(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Brújula principal rotando con el hardware
+                  Transform.rotate(
+                    angle: ((_heading ?? 0) * (math.pi / 180) * -1),
+                    child: Container(
+                      width: 220,
+                      height: 220,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: goldColor, width: 2),
+                        color: const Color(0xFF1E1E1E),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(top: 10, left: 105, child: Text("N", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 18))),
+                          Positioned(bottom: 10, left: 105, child: Text("S", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 18))),
+                          Positioned(right: 10, top: 100, child: Text("E", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 18))),
+                          Positioned(left: 10, top: 100, child: Text("O", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 18))),
+                          // Rosa de los vientos tick marks (opcional)
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Flecha indicadora central fija
+                  Icon(Icons.navigation, color: goldColor, size: 60),
+
+                  // Indicador visual de viento relativo a brújula
+                  // El viento viene desde `windDir`. Si la brújula gira `_heading`, la posición en la UI es (windDir - _heading)
+                  Transform.rotate(
+                    angle: (windDir * (math.pi / 180)) + ((_heading ?? 0) * (math.pi / 180) * -1),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 25.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.air, color: Colors.cyanAccent, size: 24),
+                            Text("${windSpeed.toInt()} km/h", style: const TextStyle(color: Colors.cyanAccent, fontSize: 10)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text("BRÚJULA DE NAVEGACIÓN", style: TextStyle(color: goldColor, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+            Text("Viento viene del: ${_getWindDirectionLetter(windDir)} ($windDir°)", style: const TextStyle(color: Colors.grey, fontSize: 14)),
+            const SizedBox(height: 30),
 
             // --- GRID DE DATOS ---
             GridView.count(
@@ -146,15 +229,12 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               children: [
-                _buildInfoCard("Clima", "${current['weather_code'] ?? '-'}", Icons.cloud, Colors.cyan), // weather code mapping pendiente
+                _buildInfoCard("Viento", "$windSpeed km/h", Icons.air, _getValueColor(windSpeed, 35.0)),
+                _buildInfoCard("Ráfagas", "$windGusts km/h", Icons.wind_power, _getValueColor(windGusts, 40.0)),
+                _buildInfoCard("Dirección", "$windDir°", Icons.navigation, Colors.cyan, rotation: windDir.toDouble()),
                 _buildInfoCard("Temp", "$temp°C", Icons.thermostat, Colors.orange),
-                _buildInfoCard("Viento", "$windSpeed km/h", Icons.air, _getValueColor(windSpeed, _maxWindSpeed)),
-                _buildInfoCard("Ráfagas", "$windGusts km/h", Icons.wind_power, _getValueColor(windGusts, _maxGusts)),
-                _buildInfoCard("Dirección", "$windDir°", Icons.navigation, Colors.white, rotation: windDir.toDouble()),
                 _buildInfoCard("Lluvia", "$precipitation mm", Icons.water_drop, precipitation > 0 ? Colors.blue : Colors.grey),
-                _buildInfoCard("Nubes", "$cloudCover%", Icons.cloud_queue, Colors.grey),
-                _buildInfoCard("Índice Kp", "$_kpIndex", Icons.public, _getValueColor(_kpIndex.toDouble(), _maxKp.toDouble())),
-                _buildInfoCard("Sats Visibles", "12+", Icons.satellite_alt, Colors.green), // Placeholder
+                _buildInfoCard("Nublado", "$cloudCover%", Icons.cloud_queue, Colors.grey),
               ],
             ),
             
@@ -173,8 +253,9 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
                 children: [
                   Text("Información Adicional", style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold)),
                   SizedBox(height: 8),
-                  Text("• Los datos de Kp se obtienen de NOAA en tiempo real.", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  Text("• El viento y clima provienen de estaciones locales vía Open-Meteo.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text("• Evaluación SORA basada en límites de viento operacionales.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text("• El viento y clima provienen de la API de Open-Meteo en tiempo real.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text("• Brújula magnética basada en sensor de hardware interno del dispositivo.", style: TextStyle(color: Colors.grey, fontSize: 12)),
                   Text("• Siempre verifique visualmente las condiciones antes de volar.", style: TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/rss_service.dart';
+import '../../services/preferences_service.dart';
 import '../../models/news_model.dart'; // Importamos nuestro nuevo modelo
 
 
@@ -16,6 +17,7 @@ class DashboardTab extends StatefulWidget {
 class _DashboardTabState extends State<DashboardTab> {
   final RssService _rssService = RssService();
   late Future<List<Map<String, String>>> _globalNewsFuture;
+  List<String> _readNewsIds = [];
   
   // Lista de imágenes de drones para rotar
   final List<String> _droneImages = [
@@ -31,9 +33,27 @@ class _DashboardTabState extends State<DashboardTab> {
   void initState() {
     super.initState();
     _globalNewsFuture = _rssService.getNews();
+    _loadReadNews();
+  }
+
+  Future<void> _loadReadNews() async {
+    final ids = await PreferencesService.getReadNewsIds();
+    setState(() {
+      _readNewsIds = ids;
+    });
+  }
+
+  void _markAsRead(String id) {
+    if (id.isNotEmpty && !_readNewsIds.contains(id)) {
+      PreferencesService.markNewsAsRead(id);
+      setState(() {
+        _readNewsIds.add(id);
+      });
+    }
   }
 
   Future<void> _launchURL(String urlString) async {
+    _markAsRead(urlString);
     final Uri url = Uri.parse(urlString);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo abrir $urlString")));
@@ -41,6 +61,7 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   void _showNewsDetail(BuildContext context, NewsModel news) { // Ahora recibe un objeto NewsModel
+    _markAsRead(news.id);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -142,6 +163,7 @@ class _DashboardTabState extends State<DashboardTab> {
                     itemCount: newsList.length,
                     itemBuilder: (context, index) {
                       final newsItem = newsList[index];
+                      final isRead = _readNewsIds.contains(newsItem.id);
 
                       return InkWell(
                         onTap: () => _showNewsDetail(context, newsItem), 
@@ -153,25 +175,67 @@ class _DashboardTabState extends State<DashboardTab> {
                               borderRadius: BorderRadius.circular(15),
                               boxShadow: [BoxShadow(color: goldColor.withOpacity(0.2), blurRadius: 10)],
                               image: newsItem.image != null && newsItem.image!.isNotEmpty
-                                  ? DecorationImage(image: CachedNetworkImageProvider(newsItem.image!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.5), BlendMode.darken))
+                                  ? DecorationImage(
+                                      image: CachedNetworkImageProvider(newsItem.image!), 
+                                      fit: BoxFit.cover, 
+                                      colorFilter: ColorFilter.mode(
+                                        isRead ? Colors.black.withOpacity(0.7) : Colors.black.withOpacity(0.4), 
+                                        BlendMode.darken
+                                      )
+                                    )
                                   : null,
-                              gradient: newsItem.image == null || newsItem.image!.isEmpty ? LinearGradient(colors: [goldColor, Colors.orange[800]!]) : null
+                              gradient: newsItem.image == null || newsItem.image!.isEmpty 
+                                  ? LinearGradient(colors: isRead ? [Colors.grey[800]!, Colors.grey[900]!] : [goldColor, Colors.orange[800]!]) 
+                                  : null
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
+                          child: Stack(
+                            children: [
+                              if (!isRead)
+                                Positioned(
+                                  top: 12,
+                                  right: 12,
+                                  child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: goldColor, borderRadius: BorderRadius.circular(5)),
-                                    child: const Text("OFICIAL SEVIGDRONE", style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold))
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Text("NUEVA", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(newsItem.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)]))
-                              ],
-                            ),
+                              Padding(
+                                padding: const EdgeInsets.all(20.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isRead ? Colors.grey : goldColor, 
+                                          borderRadius: BorderRadius.circular(5)
+                                        ),
+                                        child: Text(
+                                          "OFICIAL SEVIGDRONE", 
+                                          style: TextStyle(color: isRead ? Colors.white70 : Colors.black, fontSize: 10, fontWeight: FontWeight.bold)
+                                        )
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      newsItem.title, 
+                                      maxLines: 2, 
+                                      overflow: TextOverflow.ellipsis, 
+                                      style: TextStyle(
+                                        color: isRead ? Colors.white70 : Colors.white, 
+                                        fontSize: 20, 
+                                        fontWeight: FontWeight.bold, 
+                                        shadows: const [Shadow(color: Colors.black, blurRadius: 4)]
+                                      )
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -208,34 +272,55 @@ class _DashboardTabState extends State<DashboardTab> {
                   itemBuilder: (context, index) {
                     var item = snapshot.data![index];
                     String imgUrl = item['image'] ?? "";
+                    String linkUrl = item['link'] ?? "";
+                    bool isRead = _readNewsIds.contains(linkUrl);
 
                     return Card(
-                      color: const Color(0xFF1E1E1E),
+                      color: isRead ? const Color(0xFF161616) : const Color(0xFF1E1E1E),
                       margin: const EdgeInsets.only(bottom: 16),
                       clipBehavior: Clip.antiAlias,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 4,
                       child: InkWell(
                         onTap: () {
-                          if (item['link'] != null) _launchURL(item['link']!);
+                          if (linkUrl.isNotEmpty) _launchURL(linkUrl);
                         },
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                              SizedBox(
-                                height: 180,
-                                width: double.infinity,
-                                child: CachedNetworkImage(
-                                  imageUrl: imgUrl.isNotEmpty 
-                                      ? imgUrl 
-                                      : _droneImages[(index + DateTime.now().day) % _droneImages.length], 
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(color: Colors.black, child: const Center(child: CircularProgressIndicator(color: Colors.white24))),
-                                  errorWidget: (context, url, error) => CachedNetworkImage(
-                                    imageUrl: _droneImages[(index + DateTime.now().day) % _droneImages.length],
-                                    fit: BoxFit.cover,
+                              Stack(
+                                children: [
+                                  SizedBox(
+                                    height: 180,
+                                    width: double.infinity,
+                                    child: ColorFiltered(
+                                      colorFilter: isRead 
+                                          ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
+                                          : const ColorFilter.mode(Colors.transparent, BlendMode.saturation),
+                                      child: CachedNetworkImage(
+                                        imageUrl: imgUrl.isNotEmpty 
+                                            ? imgUrl 
+                                            : _droneImages[(index + DateTime.now().day) % _droneImages.length], 
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(color: Colors.black, child: const Center(child: CircularProgressIndicator(color: Colors.white24))),
+                                        errorWidget: (context, url, error) => CachedNetworkImage(
+                                          imageUrl: _droneImages[(index + DateTime.now().day) % _droneImages.length],
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (!isRead)
+                                    Positioned(
+                                      top: 12,
+                                      left: 12,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
+                                        child: const Text("NUEVA", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ),
+                                ],
                               ),
                             Padding(
                               padding: const EdgeInsets.all(12.0),
@@ -246,12 +331,16 @@ class _DashboardTabState extends State<DashboardTab> {
                                       item['title'] ?? "",
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                                      style: TextStyle(
+                                        color: isRead ? Colors.white70 : Colors.white, 
+                                        fontWeight: FontWeight.bold, 
+                                        fontSize: 16
+                                      )
                                   ),
                                   const SizedBox(height: 8),
                                   Row(
                                     children: [
-                                      Icon(Icons.language, size: 14, color: goldColor),
+                                      Icon(Icons.language, size: 14, color: isRead ? Colors.grey : goldColor),
                                       const SizedBox(width: 6),
                                       const Text("Fuente: Planet Drones", style: TextStyle(color: Colors.grey, fontSize: 12)),
                                       const Spacer(),

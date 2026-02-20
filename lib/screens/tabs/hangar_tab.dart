@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sevigdrone/screens/checklist_screen.dart';
 import '../hangar/drone_detail_screen.dart'; // Import the new screen
 
@@ -53,7 +54,7 @@ class HangarTab extends StatelessWidget {
       builder: (context) => StatefulBuilder( // StatefulBuilder para actualizar el dropdown
         builder: (context, setState) {
           return AlertDialog(
-            backgroundColor: const Color(0xFF1E1E1E),
+            backgroundColor: Theme.of(context).cardColor,
             title: const Text("Registrar Aeronave", style: TextStyle(color: Colors.white)),
             content: SingleChildScrollView(
               child: Column(
@@ -209,7 +210,7 @@ class HangarTab extends StatelessWidget {
                     final imageUrl = data['image_url'] as String?;
 
                     return Card(
-                      color: const Color(0xFF1E1E1E),
+                      color: Theme.of(context).cardColor,
                       margin: const EdgeInsets.only(bottom: 12),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
@@ -225,10 +226,11 @@ class HangarTab extends StatelessWidget {
                               SizedBox(
                                 height: 150,
                                 width: double.infinity,
-                                child: Image.network(
-                                  imageUrl,
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (c, e, s) => Container(height: 150, color: Colors.grey[800], child: const Icon(Icons.broken_image, color: Colors.white24, size: 40)),
+                                  placeholder: (context, url) => Container(height: 150, color: Colors.grey[800], child: const Center(child: CircularProgressIndicator())),
+                                  errorWidget: (context, url, error) => Container(height: 150, color: Colors.grey[800], child: const Icon(Icons.broken_image, color: Colors.white24, size: 40)),
                                 ),
                               ),
                             ListTile(

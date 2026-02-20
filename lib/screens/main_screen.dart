@@ -51,18 +51,18 @@ class _MainScreenState extends State<MainScreen> {
 
     // --- LISTA DE PESTAÑAS ---
     List<Widget> pages = [
-      const DashboardTab(),      // 0: Noticias
-      const FlightConditionsTab(), // 1: Condiciones (Nueva)
-      const CoursesTab(),        // 2: Cursos
-      const HangarTab(),         // 3: Hangar
+      const CoursesTab(),        // 0: Cursos (Academia) -> Pantalla Inicial
+      const DashboardTab(),      // 1: Noticias
+      const FlightConditionsTab(), // 2: Condiciones (Clima)
+      const HangarTab(),         // 3: Hangar (Flota)
       const ProfileTab(),        // 4: Perfil
     ];
 
     // --- LISTA DE BOTONES ---
     List<BottomNavigationBarItem> navItems = [
-      const BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), activeIcon: Icon(Icons.dashboard), label: "Inicio"),
-      const BottomNavigationBarItem(icon: Icon(Icons.cloud_outlined), activeIcon: Icon(Icons.cloud), label: "Condiciones"),
-      const BottomNavigationBarItem(icon: Icon(Icons.school_outlined), activeIcon: Icon(Icons.school), label: "Escuela"),
+      const BottomNavigationBarItem(icon: Icon(Icons.school_outlined), activeIcon: Icon(Icons.school), label: "Academia"),
+      const BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), activeIcon: Icon(Icons.dashboard), label: "Noticias"),
+      const BottomNavigationBarItem(icon: Icon(Icons.cloud_outlined), activeIcon: Icon(Icons.cloud), label: "Clima"),
       const BottomNavigationBarItem(icon: Icon(Icons.flight_takeoff), activeIcon: Icon(Icons.flight), label: "Hangar"),
       const BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: "Perfil"),
     ];

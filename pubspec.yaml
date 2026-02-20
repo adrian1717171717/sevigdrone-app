@@ -24,7 +24,7 @@ dependencies:
   geolocator: ^11.0.0
   permission_handler: ^11.3.0
   shared_preferences: ^2.2.2
-  metadata_fetch: ^0.4.1
+  webfeed_plus: ^1.1.2
   flutter_compass: ^0.8.0
 
 dev_dependencies:

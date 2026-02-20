@@ -69,12 +69,12 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
   IconData _soraIcon = Icons.check_circle;
 
   void _calculateSora(double wind, double gusts, double rainProp) {
-    if (wind > 35.0 || rainProp > 20.0) {
+    if (wind > 45.0 || gusts > 55.0 || rainProp > 20.0) {
       _soraStatus = "NO APTO (Peligro crítico)";
       _soraColor = Colors.red;
       _soraIcon = Icons.cancel;
-    } else if (wind > 20.0 || gusts > 25.0) {
-      _soraStatus = "PRECAUCIÓN (Viento Fuerte)";
+    } else if (wind > 30.0 || gusts > 40.0 || rainProp > 5.0) {
+      _soraStatus = "PRECAUCIÓN (Condiciones adversas)";
       _soraColor = Colors.orange;
       _soraIcon = Icons.warning;
     } else {
@@ -118,8 +118,8 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
     final int cloudCover = (current['cloud_cover'] as num?)?.toInt() ?? 0;
     final double precipitation = (current['precipitation'] as num?)?.toDouble() ?? 0.0;
     // Visibilidad no disponible directamente en current, usar precipitation de proxy
-    // Interpretamos >0.5 mm como >20% de probabilidad de lluvia
-    final double rainProb = precipitation > 0.5 ? 25.0 : 0.0; 
+    // Interpretamos >2.0 mm como >20% de probabilidad de lluvia, más permisivo para el clima
+    final double rainProb = precipitation > 2.0 ? 25.0 : (precipitation > 0.5 ? 10.0 : 0.0); 
 
     _calculateSora(windSpeed, windGusts, rainProb);
     final goldColor = Theme.of(context).primaryColor;
@@ -229,11 +229,11 @@ class _FlightConditionsTabState extends State<FlightConditionsTab> {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               children: [
-                _buildInfoCard("Viento", "$windSpeed km/h", Icons.air, _getValueColor(windSpeed, 35.0)),
-                _buildInfoCard("Ráfagas", "$windGusts km/h", Icons.wind_power, _getValueColor(windGusts, 40.0)),
+                _buildInfoCard("Viento", "$windSpeed km/h", Icons.air, _getValueColor(windSpeed, 45.0)),
+                _buildInfoCard("Ráfagas", "$windGusts km/h", Icons.wind_power, _getValueColor(windGusts, 55.0)),
                 _buildInfoCard("Dirección", "$windDir°", Icons.navigation, Colors.cyan, rotation: windDir.toDouble()),
                 _buildInfoCard("Temp", "$temp°C", Icons.thermostat, Colors.orange),
-                _buildInfoCard("Lluvia", "$precipitation mm", Icons.water_drop, precipitation > 0 ? Colors.blue : Colors.grey),
+                _buildInfoCard("Lluvia", "$precipitation mm", Icons.water_drop, precipitation > 0 ? (precipitation > 2.0 ? Colors.redAccent : Colors.orangeAccent) : Colors.grey),
                 _buildInfoCard("Nublado", "$cloudCover%", Icons.cloud_queue, Colors.grey),
               ],
             ),
